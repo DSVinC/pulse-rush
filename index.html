@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Pulse Rush</title>
+  <style>
+    :root {
+      --bg: #05060a;
+      --panel: rgba(7, 10, 18, 0.82);
+      --cyan: #00f6ff;
+      --pink: #ff3fb4;
+      --lime: #bbff00;
+      --amber: #ffb000;
+      --red: #ff4b6e;
+      --text: #ecf5ff;
+      --muted: #7a8da6;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      user-select: none;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at top, rgba(0, 246, 255, 0.08), transparent 25%),
+        radial-gradient(circle at bottom, rgba(255, 63, 180, 0.1), transparent 30%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Trebuchet MS", "Helvetica Neue", sans-serif;
+    }
+
+    body {
+      position: fixed;
+      inset: 0;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .hud,
+    .overlay,
+    .hint {
+      position: fixed;
+      left: 0;
+      right: 0;
+      z-index: 2;
+      pointer-events: none;
+    }
+
+    .hud {
+      top: 0;
+      padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hud-row {
+      display: flex;
+      gap: 10px;
+      justify-content: space-between;
+    }
+
+    .chip {
+      min-width: 0;
+      flex: 1;
+      padding: 10px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      background: var(--panel);
+      backdrop-filter: blur(12px);
+      box-shadow: 0 0 24px rgba(0, 246, 255, 0.08);
+    }
+
+    .label {
+      display: block;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+
+    .value {
+      display: block;
+      font-weight: 700;
+      font-size: 18px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .overlay {
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .panel {
+      width: min(100%, 460px);
+      pointer-events: auto;
+      padding: 22px 18px;
+      border-radius: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01)),
+        rgba(5, 8, 16, 0.9);
+      box-shadow:
+        0 18px 80px rgba(0, 0, 0, 0.45),
+        0 0 40px rgba(0, 246, 255, 0.08);
+    }
+
+    h1,
+    h2,
+    p {
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 36px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      text-shadow: 0 0 18px rgba(0, 246, 255, 0.55);
+    }
+
+    h2 {
+      font-size: 22px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      line-height: 1.45;
+      font-size: 14px;
+    }
+
+    .mode-grid {
+      margin-top: 18px;
+      display: grid;
+      gap: 10px;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      width: 100%;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(0, 246, 255, 0.18), rgba(255, 63, 180, 0.18));
+      color: var(--text);
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    }
+
+    button strong {
+      display: block;
+      font-size: 17px;
+      margin-bottom: 4px;
+    }
+
+    button span {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .actions {
+      margin-top: 14px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .hint {
+      bottom: 0;
+      padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 12px);
+      text-align: center;
+      color: rgba(236, 245, 255, 0.75);
+      font-size: 12px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .accent {
+      color: var(--pink);
+    }
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div class="hud hidden" id="hud">
+    <div class="hud-row">
+      <div class="chip">
+        <span class="label">进度</span>
+        <span class="value" id="progressValue">0%</span>
+      </div>
+      <div class="chip">
+        <span class="label">死亡</span>
+        <span class="value" id="deathValue">0</span>
+      </div>
+    </div>
+    <div class="hud-row">
+      <div class="chip">
+        <span class="label">速度</span>
+        <span class="value" id="speedValue">0 u/s</span>
+      </div>
+      <div class="chip">
+        <span class="label">检查点</span>
+        <span class="value" id="checkpointValue">0m</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="overlay" id="menuOverlay">
+    <div class="panel">
+      <h1>Pulse Rush</h1>
+      <p class="sub">霓虹节奏跑酷。全屏点击跳跃，长按抬高弹道，空中可二段跳。传送门会翻转重力，加速带会把你直接推进高压区。</p>
+      <div class="mode-grid" id="modeGrid"></div>
+    </div>
+  </div>
+
+  <div class="overlay hidden" id="resultOverlay">
+    <div class="panel">
+      <h2 id="resultTitle">System Halted</h2>
+      <p class="sub" id="resultSummary"></p>
+      <div class="actions">
+        <button id="continueButton" class="hidden">
+          <strong>从检查点继续</strong>
+          <span>保留本局死亡次数与进度</span>
+        </button>
+        <button id="retryButton">
+          <strong>重新开始</strong>
+          <span>从当前模式起点重新进入</span>
+        </button>
+        <button id="menuButton">
+          <strong>返回主菜单</strong>
+          <span>选择其他关卡或无尽模式</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint" id="hintText">Tap anywhere to jump. Hold for higher arc. Double jump once.</div>
+
+  <script>
+    const STORAGE_KEY = "pulse-rush-save-v1";
+
+    const LEVELS = [
+      {
+        id: "level1",
+        name: "关卡 1",
+        subtitle: "基础跳跃 · 60 秒",
+        duration: 60,
+        bpmStart: 120,
+        bpmEnd: 138,
+        baseSpeed: 430,
+        maxSpeed: 620,
+        checkpointEvery: 12,
+        patternWeights: ["spike", "spike", "spike", "block", "boost"]
+      },
+      {
+        id: "level2",
+        name: "关卡 2",
+        subtitle: "尖刺 + 移动平台 · 90 秒",
+        duration: 90,
+        bpmStart: 140,
+        bpmEnd: 162,
+        baseSpeed: 480,
+        maxSpeed: 720,
+        checkpointEvery: 15,
+        patternWeights: ["spike", "spike", "block", "moving", "boost", "spike"]
+      },
+      {
+        id: "level3",
+        name: "关卡 3",
+        subtitle: "重力翻转 + 极速 · 120 秒",
+        duration: 120,
+        bpmStart: 160,
+        bpmEnd: 180,
+        baseSpeed: 540,
+        maxSpeed: 880,
+        checkpointEvery: 18,
+        patternWeights: ["spike", "block", "moving", "portal", "boost", "portal", "spike"]
+      },
+      {
+        id: "endless",
+        name: "无尽模式",
+        subtitle: "无限节拍 · 直到失误",
+        duration: Infinity,
+        bpmStart: 150,
+        bpmEnd: 190,
+        baseSpeed: 500,
+        maxSpeed: 980,
+        checkpointEvery: 20,
+        patternWeights: ["spike", "block", "moving", "portal", "boost", "spike", "moving"]
+      }
+    ];
+
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const hud = document.getElementById("hud");
+    const menuOverlay = document.getElementById("menuOverlay");
+    const resultOverlay = document.getElementById("resultOverlay");
+    const modeGrid = document.getElementById("modeGrid");
+    const hintText = document.getElementById("hintText");
+    const progressValue = document.getElementById("progressValue");
+    const deathValue = document.getElementById("deathValue");
+    const speedValue = document.getElementById("speedValue");
+    const checkpointValue = document.getElementById("checkpointValue");
+    const resultTitle = document.getElementById("resultTitle");
+    const resultSummary = document.getElementById("resultSummary");
+    const continueButton = document.getElementById("continueButton");
+    const retryButton = document.getElementById("retryButton");
+    const menuButton = document.getElementById("menuButton");
+
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let worldWidth = 0;
+    let worldHeight = 0;
+
+    const state = {
+      mode: "menu",
+      activeLevel: null,
+      startedAt: 0,
+      lastFrame: 0,
+      elapsed: 0,
+      cameraX: 0,
+      distance: 0,
+      deaths: 0,
+      levelDeaths: 0,
+      checkpoints: [],
+      currentCheckpoint: null,
+      nextCheckpointIndex: 0,
+      beatIndex: 0,
+      beatTimes: [0],
+      beatPulse: 0,
+      spawnLead: 980,
+      slowmo: 0,
+      shake: 0,
+      portalFlash: 0,
+      completeAt: 0,
+      pressStart: 0,
+      inputDown: false,
+      confetti: [],
+      particles: [],
+      obstacles: [],
+      effects: [],
+      stars: [],
+      scoreDistance: 0,
+      combo: 0
+    };
+
+    const player = {
+      x: 180,
+      y: 0,
+      size: 34,
+      vy: 0,
+      gravity: 1700,
+      inverted: false,
+      jumpsLeft: 2,
+      grounded: false,
+      holdTimer: 0,
+      trail: [],
+      alive: true,
+      respawnInvuln: 0,
+      boostTimer: 0
+    };
+
+    const audioState = {
+      ctx: null,
+      master: null,
+      bassGain: null,
+      leadGain: null,
+      noiseGain: null,
+      musicOn: false,
+      nextNoteTime: 0,
+      lookAhead: 0.18,
+      scheduledStep: 0,
+      timer: null,
+      intensity: 0,
+      arpIndex: 0,
+      filterNode: null,
+      unlocked: false,
+      bgm: null
+    };
+
+    const saveData = loadSave();
+
+    function loadSave() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || { records: {}, totalDeaths: 0 };
+      } catch {
+        return { records: {}, totalDeaths: 0 };
+      }
+    }
+
+    function persistSave() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(saveData));
+    }
+
+    function resize() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      worldWidth = window.innerWidth;
+      worldHeight = window.innerHeight;
+      canvas.width = Math.floor(worldWidth * dpr);
+      canvas.height = Math.floor(worldHeight * dpr);
+      canvas.style.width = worldWidth + "px";
+      canvas.style.height = worldHeight + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      buildStars();
+      if (state.mode === "playing") {
+        player.y = getTrackSurfaceY(player.inverted) + (player.inverted ? player.size * 0.5 : -player.size * 0.5);
+      }
+    }
+
+    function buildStars() {
+      state.stars = Array.from({ length: 54 }, (_, i) => ({
+        x: (i * 197) % Math.max(1, worldWidth),
+        y: (i * 131) % Math.max(1, worldHeight),
+        r: 1 + (i % 3),
+        speed: 12 + (i % 5) * 7
+      }));
+    }
+
+    function getTrackSurfaceY(inverted) {
+      return inverted ? 112 : worldHeight - 150;
+    }
+
+    function rand(seed) {
+      const x = Math.sin(seed * 12.9898) * 43758.5453;
+      return x - Math.floor(x);
+    }
+
+    function lerp(a, b, t) {
+      return a + (b - a) * t;
+    }
+
+    function clamp(v, min, max) {
+      return Math.max(min, Math.min(max, v));
+    }
+
+    function getPlayerWorldX() {
+      return state.cameraX + player.x;
+    }
+
+    function formatTime(sec) {
+      const minutes = Math.floor(sec / 60);
+      const seconds = (sec % 60).toFixed(2).padStart(5, "0");
+      return `${minutes}:${seconds}`;
+    }
+
+    function getLevelProgress(level, elapsed) {
+      if (!Number.isFinite(level.duration)) return 0;
+      return clamp(elapsed / level.duration, 0, 1);
+    }
+
+    function getCurrentBpm(level, elapsed) {
+      const span = Number.isFinite(level.duration) ? getLevelProgress(level, elapsed) : clamp(elapsed / 150, 0, 1);
+      return lerp(level.bpmStart, level.bpmEnd, span);
+    }
+
+    function getCurrentSpeed(level, elapsed) {
+      const span = Number.isFinite(level.duration) ? getLevelProgress(level, elapsed) : clamp(elapsed / 160, 0, 1);
+      const base = lerp(level.baseSpeed, level.maxSpeed, span);
+      return base * (player.boostTimer > 0 ? 1.5 : 1);
+    }
+
+    function ensureAudio() {
+      if (audioState.ctx) return;
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      audioState.ctx = new AudioCtx();
+
+      audioState.master = audioState.ctx.createGain();
+      audioState.master.gain.value = 0.35;
+
+      audioState.filterNode = audioState.ctx.createBiquadFilter();
+      audioState.filterNode.type = "lowpass";
+      audioState.filterNode.frequency.value = 2000;
+      audioState.filterNode.Q.value = 5;
+
+      audioState.bassGain = audioState.ctx.createGain();
+      audioState.bassGain.gain.value = 0.28;
+      audioState.bassGain.connect(audioState.master);
+
+      audioState.leadGain = audioState.ctx.createGain();
+      audioState.leadGain.gain.value = 0.18;
+      audioState.leadGain.connect(audioState.filterNode);
+      audioState.filterNode.connect(audioState.master);
+
+      audioState.noiseGain = audioState.ctx.createGain();
+      audioState.noiseGain.gain.value = 0.08;
+      audioState.noiseGain.connect(audioState.master);
+
+      const bgmMaster = audioState.ctx.createGain();
+      const subGain = audioState.ctx.createGain();
+      const drumGain = audioState.ctx.createGain();
+      const padGain = audioState.ctx.createGain();
+      const arpGain = audioState.ctx.createGain();
+      const leadGain = audioState.ctx.createGain();
+      const leadFilter = audioState.ctx.createBiquadFilter();
+      const padFilter = audioState.ctx.createBiquadFilter();
+
+      bgmMaster.gain.value = 0.0001;
+      subGain.gain.value = 0.22;
+      drumGain.gain.value = 0.24;
+      padGain.gain.value = 0.14;
+      arpGain.gain.value = 0.12;
+      leadGain.gain.value = 0.18;
+
+      leadFilter.type = "lowpass";
+      leadFilter.frequency.value = 1400;
+      leadFilter.Q.value = 8;
+
+      padFilter.type = "lowpass";
+      padFilter.frequency.value = 900;
+      padFilter.Q.value = 0.8;
+
+      subGain.connect(bgmMaster);
+      drumGain.connect(bgmMaster);
+      padGain.connect(padFilter);
+      padFilter.connect(bgmMaster);
+      arpGain.connect(leadFilter);
+      leadGain.connect(leadFilter);
+      leadFilter.connect(bgmMaster);
+      bgmMaster.connect(audioState.master);
+
+      audioState.bgm = {
+        master: bgmMaster,
+        subGain,
+        drumGain,
+        padGain,
+        arpGain,
+        leadGain,
+        leadFilter,
+        padFilter,
+        chordIndex: 0
+      };
+
+      audioState.master.connect(audioState.ctx.destination);
+    }
+
+    function unlockAudio() {
+      ensureAudio();
+      audioState.unlocked = true;
+      if (audioState.ctx.state === "suspended") {
+        audioState.ctx.resume();
+      }
+      if (state.mode === "playing") {
+        startMusic();
+      }
+    }
+
+    function startMusic() {
+      ensureAudio();
+      if (!audioState.unlocked || audioState.musicOn) return;
+      if (audioState.ctx.state === "suspended") {
+        audioState.ctx.resume();
+      }
+      audioState.musicOn = true;
+      audioState.nextNoteTime = audioState.ctx.currentTime + 0.02;
+      audioState.scheduledStep = 0;
+      audioState.arpIndex = 0;
+      if (audioState.bgm) {
+        audioState.bgm.master.gain.cancelScheduledValues(audioState.ctx.currentTime);
+        audioState.bgm.master.gain.setValueAtTime(audioState.bgm.master.gain.value, audioState.ctx.currentTime);
+        audioState.bgm.master.gain.exponentialRampToValueAtTime(0.62, audioState.ctx.currentTime + 0.45);
+      }
+      audioState.timer = setInterval(scheduleMusic, 25);
+    }
+
+    function stopMusic() {
+      audioState.musicOn = false;
+      if (audioState.bgm && audioState.ctx) {
+        const now = audioState.ctx.currentTime;
+        audioState.bgm.master.gain.cancelScheduledValues(now);
+        audioState.bgm.master.gain.setValueAtTime(Math.max(audioState.bgm.master.gain.value, 0.0001), now);
+        audioState.bgm.master.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
+      }
+      if (audioState.timer) {
+        clearInterval(audioState.timer);
+        audioState.timer = null;
+      }
+    }
+
+    function playTone(type, frequency, duration, when, volume, sweep = 0, destination = null) {
+      if (!audioState.ctx) return;
+      const osc = audioState.ctx.createOscillator();
+      const gain = audioState.ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(frequency, when);
+      if (sweep) osc.frequency.exponentialRampToValueAtTime(Math.max(40, frequency + sweep), when + duration);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(volume, when + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      osc.connect(gain);
+      gain.connect(destination || audioState.master);
+      osc.start(when);
+      osc.stop(when + duration + 0.02);
+    }
+
+    function playNoise(duration, when, volume, filterFreq = 8000, destination = null) {
+      if (!audioState.ctx) return;
+      const bufferSize = audioState.ctx.sampleRate * duration;
+      const buffer = audioState.ctx.createBuffer(1, bufferSize, audioState.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = audioState.ctx.createBufferSource();
+      noise.buffer = buffer;
+      
+      const filter = audioState.ctx.createBiquadFilter();
+      filter.type = "highpass";
+      filter.frequency.value = filterFreq;
+      
+      const gain = audioState.ctx.createGain();
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(volume, when + 0.005);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(destination || audioState.noiseGain);
+      noise.start(when);
+      noise.stop(when + duration + 0.02);
+    }
+
+    function playArp(baseFreq, when, volume, duration = 0.12) {
+      if (!audioState.ctx) return;
+      const arpPattern = [0, 3, 7, 10, 12, 7, 3, 10];
+      const noteIndex = audioState.arpIndex % arpPattern.length;
+      const freq = baseFreq * Math.pow(2, arpPattern[noteIndex] / 12);
+      audioState.arpIndex++;
+      
+      const osc = audioState.ctx.createOscillator();
+      const gain = audioState.ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(freq, when);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(volume, when + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      osc.connect(gain);
+      gain.connect(audioState.bgm ? audioState.bgm.arpGain : audioState.leadGain);
+      osc.start(when);
+      osc.stop(when + duration + 0.04);
+    }
+
+    function getMusicProfile() {
+      const level = state.activeLevel;
+      const progress = level
+        ? Number.isFinite(level.duration)
+          ? getLevelProgress(level, state.elapsed)
+          : clamp(state.elapsed / 180, 0, 1)
+        : 0;
+      const combo = clamp(state.combo / 18, 0, 1);
+      const boost = player.boostTimer > 0 ? clamp(player.boostTimer / 1.5, 0.35, 1) : 0;
+      const energy = clamp(progress * 0.55 + combo * 0.25 + boost * 0.2, 0, 1);
+      return { progress, combo, boost, energy };
+    }
+
+    function getChordStack(step) {
+      const progression = [
+        [0, 3, 7],
+        [5, 8, 12],
+        [7, 10, 14],
+        [3, 7, 10]
+      ];
+      return progression[Math.floor(step / 16) % progression.length];
+    }
+
+    function playKick(when, energy) {
+      playTone("sine", 62, 0.16, when, 0.24 + energy * 0.08, -28, audioState.bgm.drumGain);
+      playTone("triangle", 110, 0.05, when, 0.08 + energy * 0.03, -55, audioState.bgm.drumGain);
+    }
+
+    function playSnare(when, energy) {
+      playNoise(0.12, when, 0.08 + energy * 0.04, 1800, audioState.bgm.drumGain);
+      playTone("triangle", 210, 0.08, when, 0.04 + energy * 0.02, -70, audioState.bgm.drumGain);
+    }
+
+    function playHiHat(when, energy, open = false) {
+      playNoise(open ? 0.09 : 0.035, when, (open ? 0.05 : 0.03) + energy * 0.03, open ? 7200 : 9500, audioState.bgm.drumGain);
+    }
+
+    function playPad(rootFreq, chord, when, energy) {
+      const duration = 1.9;
+      chord.forEach((interval, index) => {
+        const osc = audioState.ctx.createOscillator();
+        const gain = audioState.ctx.createGain();
+        osc.type = index === 0 ? "triangle" : "sine";
+        const freq = rootFreq * Math.pow(2, interval / 12);
+        osc.frequency.setValueAtTime(freq, when);
+        gain.gain.setValueAtTime(0.0001, when);
+        gain.gain.linearRampToValueAtTime(0.018 + energy * 0.024, when + 0.35);
+        gain.gain.linearRampToValueAtTime(0.0001, when + duration);
+        osc.connect(gain);
+        gain.connect(audioState.bgm.padGain);
+        osc.start(when);
+        osc.stop(when + duration + 0.08);
+      });
+    }
+
+    function playLead(rootFreq, when, energy, boost) {
+      const duration = 0.18;
+      const osc = audioState.ctx.createOscillator();
+      const gain = audioState.ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(rootFreq, when);
+      osc.detune.setValueAtTime(boost * 18, when);
+      osc.frequency.exponentialRampToValueAtTime(rootFreq * (1.18 + energy * 0.12), when + duration);
+      gain.gain.setValueAtTime(0.0001, when);
+      gain.gain.exponentialRampToValueAtTime(0.06 + energy * 0.06 + boost * 0.04, when + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
+      audioState.bgm.leadFilter.frequency.setValueAtTime(900 + energy * 2300 + boost * 1800, when);
+      audioState.bgm.leadFilter.frequency.exponentialRampToValueAtTime(1200 + energy * 3000 + boost * 2200, when + duration);
+      osc.connect(gain);
+      gain.connect(audioState.bgm.leadGain);
+      osc.start(when);
+      osc.stop(when + duration + 0.04);
+    }
+
+    function scheduleMusic() {
+      if (!audioState.musicOn || !state.activeLevel || state.mode !== "playing" || !audioState.bgm) return;
+
+      const profile = getMusicProfile();
+      audioState.intensity = profile.energy;
+      const padCutoff = 700 + profile.energy * 900 + profile.boost * 500;
+      audioState.bgm.padFilter.frequency.setTargetAtTime(padCutoff, audioState.ctx.currentTime, 0.12);
+
+      while (audioState.nextNoteTime < audioState.ctx.currentTime + audioState.lookAhead) {
+        const step = audioState.scheduledStep;
+        const level = state.activeLevel;
+        const bpm = getCurrentBpm(level, state.elapsed);
+        const stepSec = 60 / bpm / 4;
+        const beat = Math.floor(step / 4);
+        const beatInBar = beat % 4;
+        const stepInBeat = step % 4;
+        const chord = getChordStack(step);
+        const when = audioState.nextNoteTime;
+        const bassRoot = 41.2 * Math.pow(2, chord[0] / 12);
+
+        if (stepInBeat === 0) {
+          playTone("sine", clamp(bassRoot, 40, 78), 0.32, when, 0.16 + profile.energy * 0.08 + profile.boost * 0.04, 0, audioState.bgm.subGain);
+          playKick(when, profile.energy);
+          if (beatInBar === 0 || profile.energy > 0.55) {
+            playLead(155.56 * Math.pow(2, chord[1] / 12), when, profile.energy, profile.boost);
+          }
+        }
+
+        if (beatInBar === 1 && stepInBeat === 0) {
+          playSnare(when, profile.energy);
+        }
+
+        if (beatInBar === 2 && stepInBeat === 0) {
+          playKick(when, profile.energy * 0.9);
+        }
+
+        if (beatInBar === 3 && stepInBeat === 0) {
+          playSnare(when, profile.energy + profile.boost * 0.2);
+        }
+
+        if (step % 2 === 0) {
+          playHiHat(when, profile.energy, profile.energy > 0.72 && stepInBeat === 2);
+        }
+
+        if (profile.energy > 0.22 && step % 2 === 0) {
+          const arpRoot = 82.41 * Math.pow(2, chord[Math.floor(step / 2) % chord.length] / 12);
+          playArp(arpRoot * (profile.boost > 0 ? 2 : 1), when, 0.035 + profile.energy * 0.05 + profile.combo * 0.03, 0.1);
+        }
+
+        if (step % 16 === 0) {
+          playPad(82.41, chord, when, profile.energy + profile.boost * 0.2);
+        }
+
+        audioState.nextNoteTime += stepSec;
+        audioState.scheduledStep += 1;
+      }
+    }
+
+    function playSfx(name) {
+      ensureAudio();
+      if (audioState.ctx.state === "suspended") audioState.ctx.resume();
+      const now = audioState.ctx.currentTime;
+      
+      if (name === "jump") {
+        // 能量脉冲感 - 频率扫频上升 + 滤波器
+        const osc = audioState.ctx.createOscillator();
+        const gain = audioState.ctx.createGain();
+        const filter = audioState.ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(400, now);
+        filter.frequency.exponentialRampToValueAtTime(3500, now + 0.1);
+        filter.Q.value = 8;
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(180, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12);
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioState.master);
+        osc.start(now);
+        osc.stop(now + 0.14);
+        // 高频泛音
+        playTone("sine", 1200, 0.06, now + 0.02, 0.06, 400);
+      } else if (name === "death") {
+        // 数字故障/电流声 - 噪音 + 频率骤降 + 失真
+        playNoise(0.35, now, 0.12, 3000);
+        // 低频骤降
+        const osc = audioState.ctx.createOscillator();
+        const gain = audioState.ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.35);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.2, now + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(audioState.bassGain);
+        osc.start(now);
+        osc.stop(now + 0.38);
+        // 数字化闪烁声
+        for (let i = 0; i < 5; i++) {
+          playTone("square", 800 - i * 120, 0.04, now + i * 0.06, 0.08, -200);
+        }
+      } else if (name === "clear") {
+        // 胜利和弦 - 赛博朋克风格
+        const freqs = [440, 554, 659, 880]; // A 大调和弦
+        freqs.forEach((f, i) => {
+          playTone("sine", f, 0.25, now + i * 0.08, 0.12, 80);
+          playTone("triangle", f * 2, 0.18, now + i * 0.08 + 0.05, 0.06, 120);
+        });
+        // 高频闪光
+        playTone("sine", 1760, 0.3, now + 0.25, 0.08, 200);
+      } else if (name === "checkpoint") {
+        // 能量充能声 - 和弦 + 泛音
+        playTone("sine", 523, 0.12, now, 0.14, 100); // C5
+        playTone("sine", 659, 0.12, now + 0.04, 0.12, 80); // E5
+        playTone("sine", 784, 0.15, now + 0.08, 0.1, 60); // G5
+        // 数字化闪烁
+        playTone("square", 1568, 0.08, now + 0.12, 0.06, 200);
+      } else if (name === "portal") {
+        // 传送门漩涡 - 双振荡器 + 相位调制
+        const osc1 = audioState.ctx.createOscillator();
+        const osc2 = audioState.ctx.createOscillator();
+        const gain = audioState.ctx.createGain();
+        osc1.type = "sine";
+        osc1.frequency.setValueAtTime(220, now);
+        osc1.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+        osc1.frequency.exponentialRampToValueAtTime(110, now + 0.25);
+        osc2.type = "sawtooth";
+        osc2.frequency.setValueAtTime(165, now);
+        osc2.frequency.exponentialRampToValueAtTime(440, now + 0.18);
+        osc2.frequency.exponentialRampToValueAtTime(82, now + 0.28);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.15, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.3);
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(audioState.master);
+        osc1.start(now);
+        osc1.stop(now + 0.32);
+        osc2.start(now);
+        osc2.stop(now + 0.32);
+        // 漩涡噪音
+        playNoise(0.2, now + 0.05, 0.06, 6000);
+      } else if (name === "boost") {
+        // 加速引擎声 - 噪音 + 低频扫频
+        playNoise(0.25, now, 0.1, 4000);
+        const osc = audioState.ctx.createOscillator();
+        const gain = audioState.ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(60, now);
+        osc.frequency.exponentialRampToValueAtTime(240, now + 0.2);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+        osc.connect(gain);
+        gain.connect(audioState.bassGain);
+        osc.start(now);
+        osc.stop(now + 0.28);
+        // 高频加速声
+        playTone("sine", 320, 0.15, now + 0.1, 0.08, 280);
+      }
+    }
+
+    function setupMenu() {
+      modeGrid.innerHTML = "";
+      LEVELS.forEach((level) => {
+        const record = saveData.records[level.id] || {};
+        const bestLine = record.bestTime
+          ? `最佳 ${formatTime(record.bestTime)} · 总死亡 ${record.deaths || 0}`
+          : `未通关 · 总死亡 ${record.deaths || 0}`;
+        const button = document.createElement("button");
+        button.innerHTML = `<strong>${level.name}</strong><span>${level.subtitle} / ${bestLine}</span>`;
+        button.addEventListener("click", () => startRun(level.id));
+        modeGrid.appendChild(button);
+      });
+    }
+
+    function makeCheckpoint(level, time) {
+      const count = Math.floor(time / level.checkpointEvery);
+      return {
+        time: count * level.checkpointEvery,
+        distance: Math.max(0, state.distance),
+        inverted: player.inverted
+      };
+    }
+
+    function resetPlayer() {
+      player.x = Math.max(112, worldWidth * 0.24);
+      player.inverted = false;
+      player.y = getTrackSurfaceY(false) - player.size * 0.5;
+      player.vy = 0;
+      player.jumpsLeft = 2;
+      player.grounded = true;
+      player.holdTimer = 0;
+      player.trail = [];
+      player.alive = true;
+      player.respawnInvuln = 1;
+      player.boostTimer = 0;
+    }
+
+    function resetCombo() {
+      state.combo = 0;
+    }
+
+    function registerCombo(obstacle) {
+      if (!obstacle || obstacle.comboAwarded) return;
+      obstacle.comboAwarded = true;
+      state.combo += obstacle.kind === "portal" || obstacle.kind === "boost" ? 2 : 1;
+    }
+
+    function startRun(levelId) {
+      state.activeLevel = LEVELS.find((level) => level.id === levelId);
+      state.mode = "playing";
+      state.startedAt = performance.now();
+      state.lastFrame = performance.now();
+      state.elapsed = 0;
+      state.cameraX = 0;
+      state.distance = 0;
+      state.levelDeaths = 0;
+      state.beatIndex = 0;
+      state.beatTimes = [0];
+      state.beatPulse = 0;
+      state.slowmo = 0;
+      state.shake = 0;
+      state.portalFlash = 0;
+      state.completeAt = 0;
+      state.particles = [];
+      state.confetti = [];
+      state.obstacles = [];
+      state.effects = [];
+      state.currentCheckpoint = null;
+      state.nextCheckpointIndex = 1;
+      state.scoreDistance = 0;
+      state.combo = 0;
+      resetPlayer();
+      menuOverlay.classList.add("hidden");
+      resultOverlay.classList.add("hidden");
+      hud.classList.remove("hidden");
+      hintText.textContent = "点击跳跃，长按更高，空中还能再跳一次";
+      generateBeatsAhead(true);
+      startMusic();
+      updateHud();
+    }
+
+    function returnToMenu() {
+      state.mode = "menu";
+      state.activeLevel = null;
+      hud.classList.add("hidden");
+      resultOverlay.classList.add("hidden");
+      menuOverlay.classList.remove("hidden");
+      hintText.textContent = "Tap anywhere to jump. Hold for higher arc. Double jump once.";
+      stopMusic();
+      setupMenu();
+    }
+
+    function updateHud() {
+      const level = state.activeLevel;
+      if (!level) return;
+      const progress = Number.isFinite(level.duration) ? `${Math.floor(getLevelProgress(level, state.elapsed) * 100)}%` : `${Math.floor(state.distance / 10)}m`;
+      progressValue.textContent = progress;
+      deathValue.textContent = String(state.levelDeaths);
+      speedValue.textContent = `${Math.round(getCurrentSpeed(level, state.elapsed))} u/s`;
+      const nextTime = state.nextCheckpointIndex * level.checkpointEvery;
+      const secRemaining = Math.max(0, nextTime - state.elapsed);
+      checkpointValue.textContent = Number.isFinite(level.duration) ? `${secRemaining.toFixed(1)}s` : `${Math.max(0, Math.round((nextTime - state.elapsed) * getCurrentSpeed(level, state.elapsed) / 100))}m`;
+    }
+
+    function beatTimeAt(index) {
+      const level = state.activeLevel;
+      if (!level) return 0;
+      while (state.beatTimes.length <= index) {
+        const prev = state.beatTimes[state.beatTimes.length - 1];
+        const next = prev + 60 / getCurrentBpm(level, prev);
+        state.beatTimes.push(next);
+      }
+      return state.beatTimes[index];
+    }
+
+    function choosePattern(beat) {
+      const weights = state.activeLevel.patternWeights;
+      return weights[Math.floor(rand(beat * 3.17 + state.activeLevel.bpmStart) * weights.length)];
+    }
+
+    function spawnObstacleForBeat(beat) {
+      const level = state.activeLevel;
+      const spawnAt = beatTimeAt(beat);
+      const x = state.distance + state.spawnLead + beat * 22;
+      const ceilingY = getTrackSurfaceY(true);
+      const floorY = getTrackSurfaceY(false);
+      const pulseOffset = rand(beat + 9) * Math.PI * 2;
+      let type = choosePattern(beat);
+
+      if (level.id === "level1" && (type === "moving" || type === "portal")) type = "spike";
+      if (level.id === "level2" && type === "portal") type = "moving";
+      if (beat < 4) type = "spike";
+
+      if (type === "spike") {
+        const cluster = beat % 6 === 3 ? 2 : 1;
+        for (let i = 0; i < cluster; i += 1) {
+          state.obstacles.push({
+            kind: "spike",
+            x: x + i * 44,
+            y: floorY,
+            width: 32,
+            height: 28 + i * 2,
+            inverted: false,
+            spawnAt,
+            pulseOffset
+          });
+          if (level.id === "level3" && beat % 7 === 0) {
+            state.obstacles.push({
+              kind: "spike",
+              x: x + i * 44,
+              y: ceilingY,
+              width: 32,
+              height: 28 + i * 2,
+              inverted: true,
+              spawnAt,
+              pulseOffset: pulseOffset + 1
+            });
+          }
+        }
+      } else if (type === "block") {
+        state.obstacles.push({
+          kind: "block",
+          x,
+          y: floorY - 126 - rand(beat) * 90,
+          width: 42,
+          height: 42,
+          spawnAt,
+          pulseOffset
+        });
+      } else if (type === "moving") {
+        state.obstacles.push({
+          kind: "moving",
+          x,
+          baseY: floorY - 100 - rand(beat) * 120,
+          y: floorY - 120,
+          width: 88,
+          height: 18,
+          amp: 35 + rand(beat + 4) * 24,
+          speed: 1.4 + rand(beat + 8),
+          phase: rand(beat + 12) * Math.PI * 2,
+          spawnAt,
+          pulseOffset
+        });
+      } else if (type === "portal") {
+        state.obstacles.push({
+          kind: "portal",
+          x,
+          y: floorY - 70,
+          width: 40,
+          height: 120,
+          spawnAt,
+          pulseOffset
+        });
+      } else if (type === "boost") {
+        state.obstacles.push({
+          kind: "boost",
+          x,
+          y: floorY - 10,
+          width: 120,
+          height: 12,
+          inverted: false,
+          spawnAt,
+          pulseOffset
+        });
+        if (level.id === "level3" && beat % 5 === 2) {
+          state.obstacles.push({
+            kind: "portal",
+            x: x + 110,
+            y: floorY - 70,
+            width: 40,
+            height: 120,
+            spawnAt,
+            pulseOffset: pulseOffset + 2
+          });
+        }
+      }
+    }
+
+    function generateBeatsAhead(force = false) {
+      if (!state.activeLevel) return;
+      const level = state.activeLevel;
+      const maxAheadTime = state.elapsed + 8;
+      while (beatTimeAt(state.beatIndex) < maxAheadTime || force) {
+        spawnObstacleForBeat(state.beatIndex);
+        state.beatIndex += 1;
+        if (!force && beatTimeAt(state.beatIndex) >= maxAheadTime) break;
+        if (force && state.beatIndex > 24) break;
+      }
+    }
+
+    function addParticle(x, y, color, vx, vy, life, size) {
+      state.particles.push({ x, y, color, vx, vy, life, maxLife: life, size });
+    }
+
+    function explodePlayer() {
+      const px = player.x;
+      const py = player.y;
+      for (let i = 0; i < 28; i += 1) {
+        const angle = (Math.PI * 2 * i) / 28;
+        const speed = 140 + rand(i + py) * 220;
+        addParticle(px, py, i % 2 ? "#00f6ff" : "#ff3fb4", Math.cos(angle) * speed, Math.sin(angle) * speed, 0.7 + rand(i) * 0.35, 2 + rand(i + 2) * 4);
+      }
+    }
+
+    function killPlayer(reason) {
+      if (!player.alive) return;
+      player.alive = false;
+      state.levelDeaths += 1;
+      state.deaths += 1;
+      saveData.totalDeaths += 1;
+      const record = saveData.records[state.activeLevel.id] || { deaths: 0 };
+      record.deaths = (record.deaths || 0) + 1;
+      saveData.records[state.activeLevel.id] = record;
+      persistSave();
+      state.slowmo = 0.55;
+      state.shake = 16;
+      resetCombo();
+      explodePlayer();
+      playSfx("death");
+      setTimeout(() => {
+        if (state.mode !== "playing") return;
+        showResult(false, reason);
+      }, 800);
+    }
+
+    function respawnAtCheckpoint() {
+      const cp = state.currentCheckpoint;
+      if (!cp) {
+        showResult(false, "No checkpoint");
+        return;
+      }
+      player.alive = true;
+      player.inverted = cp.inverted;
+      player.x = Math.max(112, worldWidth * 0.24);
+      player.y = getTrackSurfaceY(player.inverted) + (player.inverted ? player.size * 0.5 : -player.size * 0.5);
+      player.vy = 0;
+      player.jumpsLeft = 2;
+      player.grounded = true;
+      player.holdTimer = 0;
+      player.trail = [];
+      player.respawnInvuln = 1.5;
+      player.boostTimer = 0;
+      resetCombo();
+      state.mode = "playing";
+      state.elapsed = cp.time;
+      state.distance = cp.distance;
+      state.cameraX = Math.max(0, state.distance - player.x + 100);
+      state.slowmo = 0;
+      state.obstacles = state.obstacles.filter((o) => o.x > state.distance - 100);
+      for (const obstacle of state.obstacles) {
+        delete obstacle.usedAt;
+      }
+      generateBeatsAhead(true);
+      resultOverlay.classList.add("hidden");
+      hud.classList.remove("hidden");
+      startMusic();
+      updateHud();
+    }
+
+    function showResult(success, detail) {
+      state.mode = success ? "complete" : "dead";
+      stopMusic();
+      hud.classList.add("hidden");
+      resultOverlay.classList.remove("hidden");
+      if (success) {
+        continueButton.classList.add("hidden");
+        resultTitle.textContent = "Stage Cleared";
+        resultSummary.textContent = `用时 ${formatTime(state.completeAt)}，本局死亡 ${state.levelDeaths} 次。${detail}`;
+        playSfx("clear");
+        spawnConfetti();
+        const record = saveData.records[state.activeLevel.id] || { deaths: 0 };
+        if (!record.bestTime || state.completeAt < record.bestTime) {
+          record.bestTime = state.completeAt;
+        }
+        saveData.records[state.activeLevel.id] = record;
+        persistSave();
+      } else {
+        resultTitle.textContent = "Signal Lost";
+        if (state.currentCheckpoint) {
+          continueButton.classList.remove("hidden");
+          resultSummary.textContent = `死亡位置 ${Math.round(state.distance)}m，原因：${detail}。可从最近检查点恢复，或直接重开本模式。`;
+        } else {
+          continueButton.classList.add("hidden");
+          resultSummary.textContent = `死亡位置 ${Math.round(state.distance)}m，原因：${detail}。当前还没有检查点，只能重开或回到主菜单。`;
+        }
+      }
+      setupMenu();
+    }
+
+    function spawnConfetti() {
+      state.confetti = [];
+      for (let i = 0; i < 90; i += 1) {
+        state.confetti.push({
+          x: rand(i) * worldWidth,
+          y: -rand(i + 1) * 180,
+          vx: -80 + rand(i + 2) * 160,
+          vy: 80 + rand(i + 3) * 180,
+          rot: rand(i + 4) * Math.PI * 2,
+          vr: -6 + rand(i + 5) * 12,
+          color: ["#00f6ff", "#ff3fb4", "#bbff00", "#ffb000"][i % 4],
+          size: 4 + rand(i + 7) * 8
+        });
+      }
+    }
+
+    function handlePressStart() {
+      state.inputDown = true;
+      state.pressStart = performance.now();
+      unlockAudio();
+      if (state.mode === "menu") return;
+      if (state.mode === "dead" || state.mode === "complete") return;
+      if (state.mode !== "playing" || !player.alive) return;
+      attemptJump();
+    }
+
+    function handlePressEnd() {
+      state.inputDown = false;
+      player.holdTimer = 0;
+    }
+
+    function attemptJump() {
+      if (!player.alive || player.jumpsLeft <= 0) return;
+      const upward = player.inverted ? 1 : -1;
+      player.vy = upward * 640;
+      player.jumpsLeft -= 1;
+      player.grounded = false;
+      player.holdTimer = 0.22;
+      state.shake = Math.max(state.shake, 4);
+      playSfx("jump");
+    }
+
+    function isPlayerRect() {
+      return {
+        left: player.x - player.size / 2,
+        right: player.x + player.size / 2,
+        top: player.y - player.size / 2,
+        bottom: player.y + player.size / 2
+      };
+    }
+
+    function rectsOverlap(a, b) {
+      return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+    }
+
+    function updatePlayer(dt) {
+      if (!player.alive) return;
+      const level = state.activeLevel;
+      if (!level) return;
+
+      player.boostTimer = Math.max(0, player.boostTimer - dt);
+      player.respawnInvuln = Math.max(0, player.respawnInvuln - dt);
+      const gravityDir = player.inverted ? -1 : 1;
+      const holdBoost = state.inputDown && player.holdTimer > 0 ? -gravityDir * 1250 : 0;
+      player.holdTimer = Math.max(0, player.holdTimer - dt);
+      player.vy += (player.gravity * gravityDir + holdBoost) * dt;
+      player.y += player.vy * dt;
+      player.grounded = false;
+
+      const trackY = getTrackSurfaceY(player.inverted);
+      if (!player.inverted) {
+        const groundTop = trackY;
+        if (player.y + player.size / 2 >= groundTop) {
+          player.y = groundTop - player.size / 2;
+          player.vy = 0;
+          player.grounded = true;
+          player.jumpsLeft = 2;
+        }
+      } else {
+        const ceilingBottom = trackY;
+        if (player.y - player.size / 2 <= ceilingBottom) {
+          player.y = ceilingBottom + player.size / 2;
+          player.vy = 0;
+          player.grounded = true;
+          player.jumpsLeft = 2;
+        }
+      }
+
+      const pr = isPlayerRect();
+      for (const obstacle of state.obstacles) {
+        if (obstacle.kind === "moving") {
+          obstacle.y = obstacle.baseY + Math.sin(state.elapsed * obstacle.speed + obstacle.phase) * obstacle.amp;
+          const plat = {
+            left: obstacle.x - obstacle.width / 2 - state.cameraX,
+            right: obstacle.x + obstacle.width / 2 - state.cameraX,
+            top: obstacle.y - obstacle.height / 2,
+            bottom: obstacle.y + obstacle.height / 2
+          };
+          const feet = player.inverted ? pr.top : pr.bottom;
+          const surface = player.inverted ? plat.bottom : plat.top;
+          const horiz = pr.right > plat.left + 6 && pr.left < plat.right - 6;
+          const touching = Math.abs(feet - surface) < 18;
+          const movingToward = player.inverted ? player.vy < 120 : player.vy > -120;
+          if (horiz && touching && movingToward) {
+            if (!player.inverted && pr.bottom <= plat.top + 16) {
+              player.y = plat.top - player.size / 2;
+              player.vy = 0;
+              player.grounded = true;
+              player.jumpsLeft = 2;
+            } else if (player.inverted && pr.top >= plat.bottom - 16) {
+              player.y = plat.bottom + player.size / 2;
+              player.vy = 0;
+              player.grounded = true;
+              player.jumpsLeft = 2;
+            }
+          }
+        }
+      }
+
+      player.trail.push({ x: player.x, y: player.y, life: 0.32 });
+      if (player.trail.length > 20) player.trail.shift();
+      for (const ghost of player.trail) ghost.life -= dt;
+      player.trail = player.trail.filter((ghost) => ghost.life > 0);
+
+      for (let i = 0; i < 2; i += 1) {
+        addParticle(
+          player.x - 8 - rand(state.elapsed * 100 + i) * 6,
+          player.y + (player.inverted ? 14 : -14),
+          player.inverted ? "#bbff00" : "#00f6ff",
+          -40 - rand(i + state.elapsed) * 60,
+          (player.inverted ? 1 : -1) * (40 + rand(i) * 30),
+          0.22,
+          2 + rand(i + 5) * 2
+        );
+      }
+    }
+
+    function updateObstacles(dt) {
+      const pr = isPlayerRect();
+      const level = state.activeLevel;
+      if (!level) return;
+      const playerWorldX = getPlayerWorldX();
+
+      for (const obstacle of state.obstacles) {
+        const obstacleRight = obstacle.x + obstacle.width / 2;
+        if (player.alive && obstacleRight < playerWorldX - 24) {
+          registerCombo(obstacle);
+        }
+        if (obstacle.kind === "portal" || obstacle.kind === "boost") {
+          const rect = {
+            left: obstacle.x - obstacle.width / 2 - state.cameraX,
+            right: obstacle.x + obstacle.width / 2 - state.cameraX,
+            top: obstacle.y - obstacle.height / 2,
+            bottom: obstacle.y + obstacle.height / 2
+          };
+          if (rectsOverlap(pr, rect) && player.respawnInvuln <= 0) {
+            if (obstacle.kind === "portal" && !obstacle.usedAt) {
+              obstacle.usedAt = state.elapsed;
+              player.inverted = !player.inverted;
+              player.vy *= 0.6;
+              player.y = clamp(player.y, 60, worldHeight - 60);
+              state.portalFlash = 0.4;
+              state.shake = Math.max(state.shake, 10);
+              playSfx("portal");
+            }
+            if (obstacle.kind === "boost" && !obstacle.usedAt) {
+              obstacle.usedAt = state.elapsed;
+              player.boostTimer = 1.5;
+              state.shake = Math.max(state.shake, 8);
+              playSfx("boost");
+            }
+          }
+          continue;
+        }
+
+        let rect;
+        if (obstacle.kind === "spike") {
+          rect = {
+            left: obstacle.x - obstacle.width / 2 - state.cameraX + 4,
+            right: obstacle.x + obstacle.width / 2 - state.cameraX - 4,
+            top: obstacle.inverted ? obstacle.y : obstacle.y - obstacle.height,
+            bottom: obstacle.inverted ? obstacle.y + obstacle.height : obstacle.y
+          };
+        } else {
+          rect = {
+            left: obstacle.x - obstacle.width / 2 - state.cameraX,
+            right: obstacle.x + obstacle.width / 2 - state.cameraX,
+            top: obstacle.y - obstacle.height / 2,
+            bottom: obstacle.y + obstacle.height / 2
+          };
+        }
+
+        if (rectsOverlap(pr, rect) && player.respawnInvuln <= 0) {
+          killPlayer(obstacle.kind === "moving" ? "撞上移动平台边缘" : obstacle.kind === "block" ? "撞上悬浮块" : "尖刺命中");
+          break;
+        }
+      }
+
+      state.obstacles = state.obstacles.filter((obstacle) => obstacle.x - state.cameraX > -180);
+      generateBeatsAhead(false);
+
+      const checkpointCount = Math.floor(state.elapsed / level.checkpointEvery);
+      if (checkpointCount >= state.nextCheckpointIndex && player.alive) {
+        state.currentCheckpoint = makeCheckpoint(level, state.elapsed);
+        state.nextCheckpointIndex = checkpointCount + 1;
+        playSfx("checkpoint");
+        for (let i = 0; i < 16; i += 1) {
+          addParticle(player.x, player.y, "#bbff00", -60 + rand(i) * 120, -120 + rand(i + 3) * 240, 0.45, 2 + rand(i + 1) * 3);
+        }
+      }
+    }
+
+    function updateParticles(dt) {
+      for (const p of state.particles) {
+        p.life -= dt;
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.vy += 220 * dt;
+      }
+      state.particles = state.particles.filter((p) => p.life > 0);
+    }
+
+    function updateConfetti(dt) {
+      for (const c of state.confetti) {
+        c.x += c.vx * dt;
+        c.y += c.vy * dt;
+        c.rot += c.vr * dt;
+        c.vy += 180 * dt;
+      }
+      state.confetti = state.confetti.filter((c) => c.y < worldHeight + 40);
+    }
+
+    function drawBackground() {
+      const g = ctx.createLinearGradient(0, 0, 0, worldHeight);
+      g.addColorStop(0, "#060913");
+      g.addColorStop(0.55, "#05060a");
+      g.addColorStop(1, "#090b14");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, worldWidth, worldHeight);
+
+      for (const star of state.stars) {
+        const x = (star.x - state.cameraX * 0.12 * (star.speed / 20)) % (worldWidth + 80);
+        ctx.fillStyle = `rgba(0,246,255,${0.12 + star.r * 0.08})`;
+        ctx.beginPath();
+        ctx.arc((x + worldWidth + 80) % (worldWidth + 80), star.y, star.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      const beatGlow = 0.08 + state.beatPulse * 0.18;
+      ctx.fillStyle = `rgba(0, 246, 255, ${beatGlow})`;
+      ctx.fillRect(0, getTrackSurfaceY(false), worldWidth, 4);
+      ctx.fillStyle = `rgba(255, 63, 180, ${beatGlow * 0.85})`;
+      ctx.fillRect(0, getTrackSurfaceY(true) - 4, worldWidth, 4);
+
+      for (let i = -1; i < 12; i += 1) {
+        const x = ((i * 120 - (state.cameraX * 0.45) % 120) + worldWidth) % (worldWidth + 120) - 60;
+        ctx.strokeStyle = "rgba(255,255,255,0.04)";
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x - 80, worldHeight);
+        ctx.stroke();
+      }
+    }
+
+    function drawObstacle(obstacle) {
+      const x = obstacle.x - state.cameraX;
+      const pulse = 0.55 + 0.45 * Math.sin(state.elapsed * 8 + obstacle.pulseOffset + state.beatPulse * Math.PI);
+      ctx.save();
+      if (obstacle.kind === "spike") {
+        ctx.shadowBlur = 18 + pulse * 12;
+        ctx.shadowColor = obstacle.inverted ? "#ff3fb4" : "#00f6ff";
+        ctx.fillStyle = obstacle.inverted ? `rgba(255, 63, 180, ${0.85 + pulse * 0.15})` : `rgba(0, 246, 255, ${0.85 + pulse * 0.15})`;
+        ctx.beginPath();
+        if (obstacle.inverted) {
+          ctx.moveTo(x - obstacle.width / 2, obstacle.y);
+          ctx.lineTo(x, obstacle.y + obstacle.height);
+          ctx.lineTo(x + obstacle.width / 2, obstacle.y);
+        } else {
+          ctx.moveTo(x - obstacle.width / 2, obstacle.y);
+          ctx.lineTo(x, obstacle.y - obstacle.height);
+          ctx.lineTo(x + obstacle.width / 2, obstacle.y);
+        }
+        ctx.closePath();
+        ctx.fill();
+      } else if (obstacle.kind === "block") {
+        ctx.shadowBlur = 20 + pulse * 16;
+        ctx.shadowColor = "#ff3fb4";
+        ctx.fillStyle = `rgba(255, 63, 180, ${0.7 + pulse * 0.2})`;
+        ctx.fillRect(x - obstacle.width / 2, obstacle.y - obstacle.height / 2, obstacle.width, obstacle.height);
+      } else if (obstacle.kind === "moving") {
+        ctx.shadowBlur = 24 + pulse * 10;
+        ctx.shadowColor = "#bbff00";
+        ctx.fillStyle = `rgba(187, 255, 0, ${0.68 + pulse * 0.2})`;
+        ctx.fillRect(x - obstacle.width / 2, obstacle.y - obstacle.height / 2, obstacle.width, obstacle.height);
+      } else if (obstacle.kind === "portal") {
+        ctx.strokeStyle = `rgba(255, 176, 0, ${0.7 + pulse * 0.2})`;
+        ctx.lineWidth = 4;
+        ctx.shadowBlur = 28;
+        ctx.shadowColor = "#ffb000";
+        ctx.strokeRect(x - obstacle.width / 2, obstacle.y - obstacle.height / 2, obstacle.width, obstacle.height);
+        ctx.strokeStyle = `rgba(255,255,255,${0.2 + pulse * 0.2})`;
+        ctx.strokeRect(x - obstacle.width / 4, obstacle.y - obstacle.height / 2, obstacle.width / 2, obstacle.height);
+      } else if (obstacle.kind === "boost") {
+        ctx.shadowBlur = 22 + pulse * 10;
+        ctx.shadowColor = "#00f6ff";
+        ctx.fillStyle = `rgba(0, 246, 255, ${0.3 + pulse * 0.25})`;
+        ctx.fillRect(x - obstacle.width / 2, obstacle.y - obstacle.height / 2, obstacle.width, obstacle.height);
+        ctx.strokeStyle = "rgba(255,255,255,0.65)";
+        ctx.lineWidth = 2;
+        for (let i = -1; i <= 1; i += 1) {
+          ctx.beginPath();
+          ctx.moveTo(x - 18 + i * 26, obstacle.y - 3);
+          ctx.lineTo(x + i * 26, obstacle.y);
+          ctx.lineTo(x - 18 + i * 26, obstacle.y + 3);
+          ctx.stroke();
+        }
+      }
+      ctx.restore();
+    }
+
+    function drawPlayer() {
+      ctx.save();
+      for (const ghost of player.trail) {
+        const alpha = ghost.life / 0.32;
+        ctx.fillStyle = `rgba(0,246,255,${alpha * 0.14})`;
+        ctx.fillRect(ghost.x - player.size / 2, ghost.y - player.size / 2, player.size, player.size);
+      }
+      ctx.translate(player.x, player.y);
+      ctx.rotate(state.elapsed * 8 * (player.alive ? 1 : 0.25));
+      ctx.shadowBlur = 30;
+      ctx.shadowColor = player.inverted ? "#bbff00" : "#00f6ff";
+      ctx.fillStyle = player.respawnInvuln > 0 && Math.floor(state.elapsed * 12) % 2 === 0 ? "rgba(255,255,255,0.85)" : player.inverted ? "#bbff00" : "#00f6ff";
+      ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
+      ctx.fillStyle = "rgba(5,6,10,0.85)";
+      ctx.fillRect(-player.size / 2 + 6, -player.size / 2 + 6, player.size - 12, player.size - 12);
+      ctx.restore();
+    }
+
+    function drawParticles() {
+      for (const p of state.particles) {
+        ctx.fillStyle = p.color;
+        ctx.globalAlpha = clamp(p.life / p.maxLife, 0, 1);
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawConfetti() {
+      for (const c of state.confetti) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+        ctx.rotate(c.rot);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size * 0.6);
+        ctx.restore();
+      }
+    }
+
+    function drawCheckpointMarker() {
+      if (!state.currentCheckpoint) return;
+      const x = player.x + 72;
+      ctx.save();
+      ctx.strokeStyle = "rgba(187,255,0,0.75)";
+      ctx.shadowBlur = 18;
+      ctx.shadowColor = "#bbff00";
+      ctx.beginPath();
+      ctx.moveTo(x, getTrackSurfaceY(false) - 80);
+      ctx.lineTo(x, getTrackSurfaceY(false) - 18);
+      ctx.stroke();
+      ctx.fillStyle = "#bbff00";
+      ctx.beginPath();
+      ctx.moveTo(x, getTrackSurfaceY(false) - 82);
+      ctx.lineTo(x + 26, getTrackSurfaceY(false) - 70);
+      ctx.lineTo(x, getTrackSurfaceY(false) - 58);
+      ctx.closePath();
+      ctx.fill();
+      ctx.restore();
+    }
+
+    function render() {
+      ctx.save();
+      const shakeX = state.shake > 0 ? (Math.random() - 0.5) * state.shake : 0;
+      const shakeY = state.shake > 0 ? (Math.random() - 0.5) * state.shake : 0;
+      ctx.translate(shakeX, shakeY);
+      drawBackground();
+      drawCheckpointMarker();
+      for (const obstacle of state.obstacles) {
+        if (obstacle.x - state.cameraX > -100 && obstacle.x - state.cameraX < worldWidth + 160) {
+          drawObstacle(obstacle);
+        }
+      }
+      drawParticles();
+      if (player.alive) drawPlayer();
+      drawConfetti();
+      if (state.portalFlash > 0) {
+        ctx.fillStyle = `rgba(255,176,0,${state.portalFlash * 0.18})`;
+        ctx.fillRect(0, 0, worldWidth, worldHeight);
+      }
+      ctx.restore();
+    }
+
+    function update(now) {
+      const rawDt = Math.min((now - state.lastFrame) / 1000, 0.033);
+      state.lastFrame = now;
+      const dt = rawDt * (state.slowmo > 0 ? 0.35 : 1);
+
+      if (state.mode === "playing") {
+        state.elapsed += dt;
+        const speed = getCurrentSpeed(state.activeLevel, state.elapsed);
+        state.distance += speed * dt;
+        state.cameraX = Math.max(0, state.distance - player.x + 140);
+        state.beatPulse = Math.max(0, state.beatPulse - dt * 3.4);
+        state.portalFlash = Math.max(0, state.portalFlash - dt);
+        state.slowmo = Math.max(0, state.slowmo - rawDt);
+        state.shake = Math.max(0, state.shake - rawDt * 22);
+
+        const bpm = getCurrentBpm(state.activeLevel, state.elapsed);
+        const beatSec = 60 / bpm;
+        const liveBeat = Math.floor(state.elapsed / beatSec);
+        if (liveBeat !== state.scoreDistance) {
+          state.scoreDistance = liveBeat;
+          state.beatPulse = 1;
+        }
+
+        updatePlayer(dt);
+        updateObstacles(dt);
+        updateParticles(dt);
+
+        if (Number.isFinite(state.activeLevel.duration) && state.elapsed >= state.activeLevel.duration && player.alive) {
+          state.completeAt = state.elapsed;
+          showResult(true, "节奏链路已稳定通关");
+        }
+
+        if (state.activeLevel.id === "endless" && player.alive) {
+          state.completeAt = state.elapsed;
+        }
+
+        updateHud();
+      } else {
+        state.shake = Math.max(0, state.shake - rawDt * 14);
+        state.portalFlash = Math.max(0, state.portalFlash - rawDt);
+        updateParticles(rawDt);
+        updateConfetti(rawDt);
+      }
+
+      render();
+      requestAnimationFrame(update);
+    }
+
+    function bindInput() {
+      const start = (event) => {
+        event.preventDefault();
+        handlePressStart();
+      };
+      const end = (event) => {
+        event.preventDefault();
+        handlePressEnd();
+      };
+      window.addEventListener("pointerdown", start, { passive: false });
+      window.addEventListener("pointerup", end, { passive: false });
+      window.addEventListener("pointercancel", end, { passive: false });
+      window.addEventListener("pointerleave", end, { passive: false });
+      window.addEventListener("keydown", (event) => {
+        if (event.code === "Space" || event.code === "ArrowUp") {
+          event.preventDefault();
+          handlePressStart();
+        }
+      });
+      window.addEventListener("keyup", (event) => {
+        if (event.code === "Space" || event.code === "ArrowUp") {
+          event.preventDefault();
+          handlePressEnd();
+        }
+      });
+    }
+
+    continueButton.addEventListener("click", () => {
+      if (state.currentCheckpoint) {
+        respawnAtCheckpoint();
+      }
+    });
+
+    retryButton.addEventListener("click", () => {
+      if (!state.activeLevel) {
+        returnToMenu();
+        return;
+      }
+      startRun(state.activeLevel.id);
+    });
+
+    menuButton.addEventListener("click", () => {
+      returnToMenu();
+    });
+
+    window.addEventListener("resize", resize);
+
+    setupMenu();
+    bindInput();
+    resize();
+    requestAnimationFrame((time) => {
+      state.lastFrame = time;
+      requestAnimationFrame(update);
+    });
+  </script>
+</body>
+</html>
