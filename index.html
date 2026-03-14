@@ -151,19 +151,31 @@
 
     .timer-chip {
       min-width: 210px;
-      padding: 14px 22px;
+      padding: 0;
       text-align: center;
+      border: 0;
+      background: transparent;
+      backdrop-filter: none;
+      box-shadow: none;
     }
 
     .timer-chip .label {
-      margin-bottom: 8px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      letter-spacing: 0.28em;
+      color: rgba(236, 245, 255, 0.72);
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.2);
     }
 
     .timer-chip .value {
-      font-size: clamp(34px, 6vw, 54px);
-      letter-spacing: 0.06em;
-      color: var(--cyan);
-      text-shadow: 0 0 24px rgba(0, 246, 255, 0.28);
+      font-size: clamp(48px, 9vw, 88px);
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      color: #8ffcff;
+      text-shadow:
+        0 0 12px rgba(143, 252, 255, 0.95),
+        0 0 28px rgba(0, 246, 255, 0.72),
+        0 0 58px rgba(255, 63, 180, 0.34);
     }
 
     .progress-wrap {
@@ -206,18 +218,13 @@
       transition: width 0.12s linear;
     }
 
-    .hearts-chip {
-      min-width: 180px;
-      max-width: min(46vw, 320px);
-    }
-
     .hearts {
       display: flex;
       flex-wrap: wrap;
       gap: 4px 6px;
-      min-height: 28px;
-      font-size: 18px;
-      text-shadow: 0 0 10px rgba(255, 75, 110, 0.4);
+      min-height: 20px;
+      font-size: 14px;
+      text-shadow: 0 0 8px rgba(255, 75, 110, 0.34);
     }
 
     .heart {
@@ -518,9 +525,12 @@
       padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 12px);
       text-align: center;
       color: rgba(236, 245, 255, 0.75);
-      font-size: 12px;
+      font-size: 13px;
       letter-spacing: 0.06em;
       text-transform: uppercase;
+      text-shadow:
+        0 0 10px rgba(0, 246, 255, 0.2),
+        0 0 18px rgba(255, 63, 180, 0.12);
     }
 
     .center-hint {
@@ -684,15 +694,12 @@
 
   <div class="hud hidden" id="hud">
     <div class="hud-corner left">
-      <div class="chip hearts-chip">
-        <span class="label">生命值</span>
-        <div class="hearts" id="livesValue" aria-label="生命值"></div>
-      </div>
+      <div class="hearts" id="livesValue" aria-label="生命值"></div>
     </div>
     <div class="hud-center">
       <div class="chip timer-chip">
-        <span class="label">持续时间</span>
-        <span class="value" id="timeValue">0:00.00</span>
+        <span class="label">分数</span>
+        <span class="value" id="timeValue">0</span>
       </div>
       <div class="chip progress-wrap">
         <div class="progress-meta">
@@ -904,6 +911,33 @@
     let worldWidth = 0;
     let worldHeight = 0;
     const MAX_LIVES = 10;
+    const GAME_TIPS = [
+      "长按可以跳得更高",
+      "空中可以再跳一次",
+      "绿色检查点保存进度",
+      "传送门会翻转重力方向",
+      "加速带让你冲得更快",
+      "移动平台的边缘也会判定碰撞",
+      "贴着尖刺起跳，比提早乱跳更稳",
+      "连续越过障碍会累积节奏连击",
+      "翻转重力后，记得看上方跑道",
+      "速度拉高时，提前预判下一拍",
+      "落地瞬间马上起跳，节奏最顺",
+      "引导关卡会把全部障碍都过一遍"
+    ];
+    const TUTORIAL_SCRIPT = [
+      { beat: 1, type: "spike", message: "尖刺：踩中就掉命，起跳别贪晚" },
+      { beat: 4, type: "block", message: "悬浮块：提前起跳，从下方穿不过去" },
+      { beat: 7, type: "moving", message: "移动平台：它会晃，盯准节奏再落脚" },
+      { beat: 10, type: "portal", message: "传送门：穿过去会翻转重力方向" },
+      { beat: 13, type: "boost", message: "加速带：踩上去会立刻提速冲刺" },
+      { beat: 17, type: "spike" },
+      { beat: 20, type: "block" },
+      { beat: 23, type: "moving" },
+      { beat: 27, type: "portal" },
+      { beat: 31, type: "boost" }
+    ];
+    const TUTORIAL_EVENT_BY_BEAT = Object.fromEntries(TUTORIAL_SCRIPT.map((event) => [event.beat, event]));
 
     const state = {
       mode: "menu",
@@ -935,10 +969,13 @@
       effects: [],
       stars: [],
       scoreDistance: 0,
+      score: 0,
       combo: 0,
       lives: MAX_LIVES,
       tutorialMessage: "",
-      tutorialHitCooldown: 0
+      tutorialHitCooldown: 0,
+      tipTimer: 0,
+      currentTipIndex: -1
     };
 
     const player = {
@@ -1050,29 +1087,43 @@
           state.tutorialMessage = "";
           setCenterHint("", false);
         }
-        return;
-      }
-
-      let message = "点击屏幕跳跃";
-      if (state.elapsed >= 20) {
-        message = "绿色是检查点，保存进度";
-      } else if (state.elapsed >= 10) {
-        message = "长按跳更高，空中可再跳一次";
-      }
-
-      if (message !== state.tutorialMessage) {
-        state.tutorialMessage = message;
-        setCenterHint(message, true);
       }
     }
 
-    function flashTutorialCollision(message) {
+    function showCenterHintMessage(message, duration = 2.2) {
       state.tutorialMessage = message;
       setCenterHint(message, true);
       state.effects.push({
-        kind: "tutorialHintReset",
-        life: 1.2
+        kind: "centerHint",
+        life: duration,
+        message
       });
+    }
+
+    function flashTutorialCollision(message) {
+      showCenterHintMessage(message, 1.2);
+    }
+
+    function pickRandomTipIndex() {
+      if (GAME_TIPS.length <= 1) return 0;
+      let nextIndex = Math.floor(Math.random() * GAME_TIPS.length);
+      while (nextIndex === state.currentTipIndex) {
+        nextIndex = Math.floor(Math.random() * GAME_TIPS.length);
+      }
+      return nextIndex;
+    }
+
+    function rotateTip(force = false) {
+      if (state.mode !== "playing") return;
+      if (!force && state.tipTimer < 3) return;
+      state.tipTimer = 0;
+      state.currentTipIndex = pickRandomTipIndex();
+      hintText.textContent = GAME_TIPS[state.currentTipIndex];
+      hintText.classList.remove("hidden");
+    }
+
+    function getScore() {
+      return Math.max(0, Math.round(state.distance / 8 + state.combo * 25));
     }
 
     function applyAudioSettings() {
@@ -1695,17 +1746,19 @@
       state.currentCheckpoint = null;
       state.nextCheckpointIndex = 1;
       state.scoreDistance = 0;
+      state.score = 0;
       state.combo = 0;
       state.lives = MAX_LIVES;
       state.tutorialMessage = "";
       state.tutorialHitCooldown = 0;
+      state.tipTimer = 3;
+      state.currentTipIndex = -1;
       resetPlayer();
       menuOverlay.classList.add("hidden");
       resultOverlay.classList.add("hidden");
       settingsOverlay.classList.add("hidden");
       hud.classList.remove("hidden");
-      hintText.textContent = "点击跳跃，长按更高，空中还能再跳一次";
-      hintText.classList.remove("hidden");
+      rotateTip(true);
       updateTutorialHint();
       generateBeatsAhead(true);
       startMusic();
@@ -1735,7 +1788,8 @@
       const progress = Number.isFinite(level.duration) ? `${Math.floor(progressRatio * 100)}%` : `${Math.floor(state.distance / 10)}m`;
       progressValue.textContent = progress;
       progressBar.style.width = `${progressRatio * 100}%`;
-      timeValue.textContent = formatTime(state.elapsed);
+      state.score = getScore();
+      timeValue.textContent = state.score.toLocaleString("zh-CN");
       renderLives();
     }
 
@@ -1762,12 +1816,16 @@
       const ceilingY = getTrackSurfaceY(true);
       const floorY = getTrackSurfaceY(false);
       const pulseOffset = rand(beat + 9) * Math.PI * 2;
+      const tutorialEvent = level.id === "tutorial" ? TUTORIAL_EVENT_BY_BEAT[beat] : null;
       let type = choosePattern(beat);
 
+      if (tutorialEvent) {
+        type = tutorialEvent.type;
+      }
       if (level.id === "level1" && (type === "moving" || type === "portal")) type = "spike";
       if (level.id === "level2" && type === "portal") type = "moving";
-      if (level.id === "tutorial" && beat % 3 !== 1) return;
-      if (beat < 4) type = level.id === "tutorial" ? "block" : "spike";
+      if (level.id === "tutorial" && !tutorialEvent) return;
+      if (beat < 4 && level.id !== "tutorial") type = "spike";
 
       if (type === "spike") {
         const cluster = level.id === "tutorial" ? 1 : beat % 6 === 3 ? 2 : 1;
@@ -1780,7 +1838,8 @@
             height: 28 + i * 2,
             inverted: false,
             spawnAt,
-            pulseOffset
+            pulseOffset,
+            tutorialHint: i === 0 ? tutorialEvent?.message : undefined
           });
           if (level.id === "level3" && beat % 7 === 0) {
             state.obstacles.push({
@@ -1799,46 +1858,50 @@
         state.obstacles.push({
           kind: "block",
           x,
-          y: level.id === "tutorial" ? floorY - 118 - rand(beat) * 54 : floorY - 126 - rand(beat) * 90,
+          y: level.id === "tutorial" && beat > 10 ? ceilingY + 118 + rand(beat) * 54 : level.id === "tutorial" ? floorY - 118 - rand(beat) * 54 : floorY - 126 - rand(beat) * 90,
           width: 42,
           height: 42,
           spawnAt,
-          pulseOffset
+          pulseOffset,
+          tutorialHint: tutorialEvent?.message
         });
       } else if (type === "moving") {
         state.obstacles.push({
           kind: "moving",
           x,
-          baseY: floorY - 100 - rand(beat) * 120,
-          y: floorY - 120,
+          baseY: level.id === "tutorial" && beat > 10 ? ceilingY + 100 + rand(beat) * 120 : floorY - 100 - rand(beat) * 120,
+          y: level.id === "tutorial" && beat > 10 ? ceilingY + 120 : floorY - 120,
           width: 88,
           height: 18,
           amp: 35 + rand(beat + 4) * 24,
           speed: 1.4 + rand(beat + 8),
           phase: rand(beat + 12) * Math.PI * 2,
           spawnAt,
-          pulseOffset
+          pulseOffset,
+          tutorialHint: tutorialEvent?.message
         });
       } else if (type === "portal") {
         state.obstacles.push({
           kind: "portal",
           x,
-          y: floorY - 70,
+          y: level.id === "tutorial" && beat > 10 ? ceilingY + 70 : floorY - 70,
           width: 40,
           height: 120,
           spawnAt,
-          pulseOffset
+          pulseOffset,
+          tutorialHint: tutorialEvent?.message
         });
       } else if (type === "boost") {
         state.obstacles.push({
           kind: "boost",
           x,
-          y: floorY - 10,
+          y: level.id === "tutorial" && beat > 10 ? ceilingY + 10 : floorY - 10,
           width: 120,
           height: 12,
-          inverted: false,
+          inverted: level.id === "tutorial" && beat > 10,
           spawnAt,
-          pulseOffset
+          pulseOffset,
+          tutorialHint: tutorialEvent?.message
         });
         if (level.id === "level3" && beat % 5 === 2) {
           state.obstacles.push({
@@ -1995,7 +2058,10 @@
           activeEffects.push(effect);
           continue;
         }
-        if (effect.kind === "tutorialHintReset") {
+        if (effect.kind === "centerHint" && state.tutorialMessage === effect.message) {
+          state.tutorialMessage = "";
+          setCenterHint("", false);
+        } else if (effect.kind === "tutorialHintReset") {
           updateTutorialHint();
         }
       }
@@ -2148,6 +2214,10 @@
       const tutorialNoPenalty = level.id === "tutorial";
 
       for (const obstacle of state.obstacles) {
+        if (obstacle.tutorialHint && !obstacle.tutorialHintShown && obstacle.x - playerWorldX < 240) {
+          obstacle.tutorialHintShown = true;
+          showCenterHintMessage(obstacle.tutorialHint, 2.4);
+        }
         const obstacleRight = obstacle.x + obstacle.width / 2;
         if (player.alive && obstacleRight < playerWorldX - 24) {
           registerCombo(obstacle);
@@ -2200,7 +2270,10 @@
           if (tutorialNoPenalty) {
             if (state.tutorialHitCooldown <= 0) {
               state.tutorialHitCooldown = 1.1;
-              flashTutorialCollision(obstacle.kind === "block" ? "碰到悬浮块了，调整起跳时机" : "碰到尖刺了，别急，继续练");
+              let tutorialCrashMessage = "碰到尖刺了，别急，继续练";
+              if (obstacle.kind === "block") tutorialCrashMessage = "碰到悬浮块了，调整起跳时机";
+              if (obstacle.kind === "moving") tutorialCrashMessage = "移动平台没踩稳，再跟一拍试试";
+              flashTutorialCollision(tutorialCrashMessage);
               state.shake = Math.max(state.shake, 5);
               playSfx("hit");
             }
@@ -2482,6 +2555,8 @@
       if (state.mode === "playing") {
         state.elapsed += dt;
         state.tutorialHitCooldown = Math.max(0, state.tutorialHitCooldown - dt);
+        state.tipTimer += dt;
+        rotateTip();
         const speed = getCurrentSpeed(state.activeLevel, state.elapsed);
         state.distance += speed * dt;
         state.cameraX = Math.max(0, state.distance - player.x + 140);
