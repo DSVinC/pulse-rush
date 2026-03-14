@@ -21,7 +21,21 @@
       box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
       touch-action: none;
+      -webkit-user-select: none;
       user-select: none;
+    }
+
+    html,
+    body,
+    canvas,
+    img {
+      -webkit-touch-callout: none;
+    }
+
+    canvas,
+    img {
+      -webkit-user-drag: none;
+      user-drag: none;
     }
 
     html,
@@ -1710,6 +1724,12 @@
           event.preventDefault();
           handlePressEnd();
         }
+      });
+      window.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+      });
+      window.addEventListener("selectstart", (event) => {
+        event.preventDefault();
       });
     }
 
